@@ -1,28 +1,29 @@
-# Use specific LTS Node.js build on slim LTS Debian OS
 FROM node:24.11.0-bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends dumb-init
 
-# Indicate to observing Node.js modules that this is a production environment
+RUN apt-get update && apt-get install -y --no-install-recommends dumb-init git ca-certificates
+
 ENV NODE_ENV=production
 
-# Create reelyactive user to run Pareto Anywhere
 RUN useradd -m -s /bin/bash reelyactive
 USER reelyactive
 
-# Copy repo files as reelyactive user to /home/reelyactive/pareto-anywhere
 WORKDIR /home/reelyactive/pareto-anywhere
 COPY --chown=reelyactive . /home/reelyactive/pareto-anywhere
 
-# Install the production package dependencies
+# Include Pareto Apps
+RUN rm -rf web/apps && mkdir -p web/apps && \
+    git -C web/apps init && \
+    git -C web/apps fetch --depth=1 https://github.com/reelyactive/pareto-anywhere-apps.git bb052b36a919e5482b7c23c0905a3cc978b5b318 && \
+    git -C web/apps checkout --detach FETCH_HEAD && \
+    rm -rf web/apps/.git && \
+    test -f web/apps/index.html
+
 RUN npm install --omit=dev
 
-# Prepare the local folders, and ESMapDB databases, to accept reads and writes
 RUN mkdir -p data/images data/records && \
     mkdir -p data/associations data/features data/stories && \
     touch data/associations/LOCK data/features/LOCK data/stories/LOCK
 
-# Expose port 3001 for web, 50001 for UDP raddecs, 50000 for UDP reel packets
 EXPOSE 3001/tcp 50000/udp 50001/udp
 
-# Run Pareto Anywhere using the standard startup script
 CMD ["dumb-init","node","bin/pareto-anywhere"]
